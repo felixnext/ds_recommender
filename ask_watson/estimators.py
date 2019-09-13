@@ -3,6 +3,7 @@
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, MultiOutputMixin
+from sklearn.multioutput import MultiOutputClassifier
 
 
 class FunkSVDEstimator(BaseEstimator, RegressorMixin):
@@ -14,55 +15,74 @@ class FunkSVDEstimator(BaseEstimator, RegressorMixin):
     latent_features (int): number of latent features to learn through FunkSVD
     early_stop (bool): Defines if early stopping is enabled
     early_stop_thres (float): Threshold for early stopping (default: `0.0001`)
+    debug (bool): Defines if debug output for training epochs should be given
   '''
-  def __init__(self, epochs=25, lr=0.005, latent_features=15, early_stop=False, early_stop_thres=0.0001):
+  def __init__(self, epochs=25, lr=0.005, latent_features=15, early_stop=False, early_stop_thres=0.0001, debug=False):
     # set relevant values
     self.lr = lr
     self.epochs = epochs
     self.latent = latent_features
     self.early_stop = early_stop
     self.early_thres = early_stop_thres
+    self.debug = debug
     # generate random start matrix
     self.user_mat = None
     self.item_mat = None
-    # TODO: retrieve list of IDs to match against items
+    self.user_idxs = None
+    self.item_idxs = None
 
   def fit(self, X, y=None):
     '''Fits the SVD matricies to the given values.
 
     Args:
-      X (np.array): 2D Numpy Array that contains the user-item matrix
+      X (np.array): 2D Numpy Array that contains the user-item matrix - Note that the column and row indices of the array have to be set to meaningful values
     '''
     # TODO: error checks
+    if not isinstance(X, pd.DataFrame):
+      print("Warning: X value to fit is not a pandas Dataframe, might not be able to retrieve accurate ids for predict function...")
+      X = pd.DataFrame(X)
 
     # init with random data
     self.user_mat = np.random.rand(X.shape[0], self.latent)
     self.item_mat = np.random.rand(self.latent, X.shape[1])
-    accum_sse = np.INF
+    accum_sse = np.Inf
+
+    # store indices for later retrival
+    self.user_idxs = np.array(X.index)
+    self.item_idxs = np.array(X.columns)
+
+    # check for debug output
+    if self.debug: print("Iterations | Mean Squared Error ")
 
     # iterate through all epochs
     for ep in range(self.epochs):
       # setup vals
       old_sse = accum_sse
       accum_sse = 0
+      num_items = 0
 
       # For each user-movie pair
       for u_idx in range(X.shape[0]):
         for m_idx in range(X.shape[1]):
           # if the rating exists
-          if not np.isnan(X[u_idx, m_idx]):
+          if not np.isnan(X.iloc[u_idx, m_idx]):
             # compute the error as the actual minus the dot product of the user and movie latent features
-            act = X[u_idx, m_idx]
+            act = X.iloc[u_idx, m_idx]
             pu = self.user_mat[u_idx, :]
-            pm = self.movie_mat[:, m_idx]
+            pm = self.item_mat[:, m_idx]
             pred = np.sum(np.dot(pu, pm))
             accum_sse += (pred - act) ** 2
+            num_items += 1
 
             # update the values in each matrix in the direction of the gradient
             pu_new = pu + self.lr * 2 * (act-pred) * pm
             pm_new = pm + self.lr * 2 * (act-pred) * pu_new
             self.user_mat[u_idx, :]  = pu_new
-            self.movie_mat[:, m_idx] = pm_new
+            self.item_mat[:, m_idx] = pm_new
+
+      # debug output
+      accum_sse = accum_sse / max([num_items, 1])
+      if self.debug: print("{:10} | {:.6f}".format(ep, accum_sse))
 
       # check for early stopping
       if self.early_stop == True and old_sse - accum_sse < self.early_thres:
@@ -80,7 +100,7 @@ class FunkSVDEstimator(BaseEstimator, RegressorMixin):
       Array of predicted values
     '''
     # check for init
-    if self.user_mat is None or self.movie_mat is None:
+    if self.user_mat is None or self.item_mat is None:
       raise RuntimeError("FunkSVDEstimator has not been fitted!")
 
     # retrieve the relevant items to predict (if possible)
@@ -134,7 +154,34 @@ class FunkSVDEstimator(BaseEstimator, RegressorMixin):
       n_items += 1
 
     # check if
-    if n_items == 0: return np.INF
+    if n_items == 0: return np.Inf
 
     # calculate and return
     return np.sqrt(rmse/n_items)
+
+
+class SimilarityEstimator(BaseEstimator, MultiOutputClassifier):
+  '''Estimator for similar items based on the `SimilarityTransformer`.
+
+  Args:
+    num_items (int): Number of items that should be estimated
+  '''
+  def __init__(self, num_items):
+    self.num_items = num_items
+
+  def fit(self, X, y, sample_weight=None):
+    return self
+
+  def predict(self, X):
+    '''Predicts the desired number of outputs.
+
+    Returns:
+      Array of shape (X.shape[0], num_items)
+    '''
+    pass
+
+  def predict_proba(self, X):
+    '''Predicts the desired number of outputs and returns normalized scores with them.
+
+    '''
+    pass
