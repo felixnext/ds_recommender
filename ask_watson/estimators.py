@@ -185,3 +185,10 @@ class SimilarityEstimator(BaseEstimator, MultiOutputClassifier):
 
     '''
     pass
+
+
+# TODO: similar to FunkSVD Estimator create neural network estimator that trains a TF model?
+class NeuralValueEstimator(BaseEstimator, RegressorMixin):
+  '''Value Estimator that uses a neural network to train the prediction of relevant input items.'''
+  # TODO: define which input features to use?
+  pass

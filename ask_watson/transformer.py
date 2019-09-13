@@ -53,6 +53,8 @@ class UserItemTransformer(BaseEstimator, TransformerMixin):
 class SimilarityTransformer(BaseEstimator, TransformerMixin):
   '''Transformer that constructs a similarity matrix.
 
+  This transform creates a item-item similarity matrix that can be used to recommend new items.
+
   Args:
     cols (list): List of columns (int or str) used as id - if tuple take the indexed ids from first to second element
     preserve_ids (bool): Defines if the original index should be preserved (as index and columns)
@@ -108,10 +110,15 @@ class RankingTransformer(BaseEstimator, TransformerMixin):
     ranking_cols (list): List of str of the columns that should be used for rating
     min_count (int): Minimal number of rating elements to consider an element (if None consider all elements)
     id_col (str): Column to used for the id (if `None` use the index)
+    agg_fcts (list): List of string values that contain the aggregation functions for the separate `ranking_cols` (if None use `mean`)
     ascending (bool): Defines if the elements should be order ascending (might also be an array of same length as rating cols)
   '''
-  def __init__(self, ranking_cols, min_count=None, id_col=None, ascending=False):
-    pass
+  def __init__(self, ranking_cols, min_count=None, id_col=None, agg_fcts=None ascending=False):
+    self.ranking_cols = ranking_cols
+    self.id_col = id_col
+    self.min_count = min_count
+    self.aggs = agg_fcts
+    self.ascending = ascending
 
   def fit(self, X, y=None):
     return self
@@ -125,4 +132,46 @@ class RankingTransformer(BaseEstimator, TransformerMixin):
     Returns:
       DataFrame of Ranked items with column item_id, score
     '''
-    pass
+    # prepare dataframe
+    idx = self.id_col
+    mat = X
+    if self.id_col is None:
+      idx = X.index.name
+      mat = X.reset_index()
+    # safe the dataframe for later
+    org = mat
+
+    # group the dataframe
+    grp = mat.groupby(idx)
+    # retrieve the aggration structure
+    aggs = self.aggs
+    cols = ([self.ranking_cols] if isinstance(self.ranking_cols, str) else self.ranking_cols)
+    if aggs is None:
+      aggs = ['mean'] * len(cols)
+    named_cols = ["{}_{}".format(x, y) for x, y in zip(cols, aggs)]
+
+    # execute the aggrations based on pandas version
+    pd_ver = [int(x) for x in pd.__version__.split('.')]
+    if pd_ver[0] == 0 and pd_ver[1] < 25:
+      grp = grp.agg(**dict(zip(named_cols, zip(cols, aggs))))
+    else:
+      # perform single aggregations
+      items = []
+      for agg, col in zip(aggs, cols):
+        items.append(grp.agg(agg)[col])
+      grp = pd.DataFrame(**dict(zip(named_cols, items)))
+      # update the index
+      grp.index = items[0].index
+
+    # count filter
+    if self.min_rating is not None:
+      count = mat.groupby(idx).count().iloc[:, 0]
+      grp = grp[count >= self.min_rating]
+
+    # reset the index and join with original dataframe
+    mat = org.set_index(idx).join(grp)
+
+    # sort the resulting dataframe
+    mat = mat.sort_values(by=cols, ascending=self.ascending)
+
+    return mat
