@@ -30,12 +30,14 @@ class UserItemTransformer(BaseEstimator, TransformerMixin):
     item_col (str): Name of the column used for the itme side
     value_col (str): Name of the column that contains the matrix values
     agg_fct (str): Aggregation function that is used in case of duplicates
+    binarize (bool): Defines if the interactions should be binarized to 0 and 1
   '''
-  def __init__(self, user_col, item_col, value_col, agg_fct='max'):
+  def __init__(self, user_col, item_col, value_col, agg_fct='max', binarize=False):
     self.user_col = user_col
     self.item_col = item_col
     self.value_col = value_col
     self.agg = agg_fct
+    self.binarize = binarize
 
   def fit(self, x, y=None):
     return self
@@ -52,6 +54,11 @@ class UserItemTransformer(BaseEstimator, TransformerMixin):
       X = pd.DataFrame(X)
     # perform transformation
     mat = X.groupby([self.user_col, self.item_col])[self.value_col].agg(self.agg).unstack()
+
+    # check for binarization
+    if self.binarize:
+      mat = mat.notnull().astype('int')
+
     return mat
 
 
@@ -68,7 +75,7 @@ class SimilarityTransformer(BaseEstimator, TransformerMixin):
     normalize (bool): Normalizes the output values by the total of items available in each column (logical or)
     remove_duplicates (bool): Defines if an additional duplicate removal should be done
   '''
-  def __init__(self, cols=None, preserve_idx=True, index_col=None, normalize=True, remove_duplicates=False):
+  def __init__(self, cols=None, preserve_idx=True, index_col=None, normalize=False, remove_duplicates=False):
     self.cols = cols
     self.preserve_idx = preserve_idx
     self.index_col = index_col

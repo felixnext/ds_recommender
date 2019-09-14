@@ -39,7 +39,7 @@ def sol_2_test(top_articles):
 
     checks = ['top_5', 'top_10', 'top_20']
     for idx, file in enumerate(checks):
-        if set(eval(file)) == set(pickle.load(open( "{}.p".format(file), "rb" ))):
+        if set(eval(file)) == set(pickle.load(open( os.path.join(folder, "data/{}.p".format(file)), "rb" ))):
             print("Your {} looks like the solution list! Nice job.".format(file))
         else:
             print("Oops! The {} list doesn't look how we expected.  Try again.".format(file))

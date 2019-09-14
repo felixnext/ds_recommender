@@ -160,33 +160,6 @@ class FunkSVDEstimator(BaseEstimator, RegressorMixin):
     return np.sqrt(rmse/n_items)
 
 
-class SimilarityEstimator(MultiOutputClassifier):
-  '''Estimator for similar items based on the `SimilarityTransformer`.
-
-  Args:
-    num_items (int): Number of items that should be estimated
-  '''
-  def __init__(self, num_items):
-    self.num_items = num_items
-
-  def fit(self, X, y, sample_weight=None):
-    return self
-
-  def predict(self, X):
-    '''Predicts the desired number of outputs.
-
-    Returns:
-      Array of shape (X.shape[0], num_items)
-    '''
-    pass
-
-  def predict_proba(self, X):
-    '''Predicts the desired number of outputs and returns normalized scores with them.
-
-    '''
-    pass
-
-
 # TODO: similar to FunkSVD Estimator create neural network estimator that trains a TF model?
 class NeuralValueEstimator(BaseEstimator, RegressorMixin):
   '''Value Estimator that uses a neural network to train the prediction of relevant input items.'''
