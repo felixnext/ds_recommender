@@ -160,7 +160,7 @@ class FunkSVDEstimator(BaseEstimator, RegressorMixin):
     return np.sqrt(rmse/n_items)
 
 
-class SimilarityEstimator(BaseEstimator, MultiOutputClassifier):
+class SimilarityEstimator(MultiOutputClassifier):
   '''Estimator for similar items based on the `SimilarityTransformer`.
 
   Args:

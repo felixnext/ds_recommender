@@ -1,6 +1,7 @@
 '''Various transformers to prepare data for the estimators.'''
 
 
+import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -40,7 +41,11 @@ class UserItemTransformer(BaseEstimator, TransformerMixin):
     return self
 
   def transform(self, X):
-    '''Transform the given input data into a user-item matrix.'''
+    '''Transform the given input data into a user-item matrix.
+
+    Args:
+      X (pd.DataFrame): Dataframe of the format `user | item | value`
+    '''
     # safty: check if pandas dataframe
     if not isinstance(X, pd.DataFrame):
       print("Warning: Input is not a pandas.DataFrame, column selection might not be possible (due to missing names)...")
@@ -54,27 +59,39 @@ class SimilarityTransformer(BaseEstimator, TransformerMixin):
   '''Transformer that constructs a similarity matrix.
 
   This transform creates a item-item similarity matrix that can be used to recommend new items.
+  Note that normalization might take some time.
 
   Args:
     cols (list): List of columns (int or str) used as id - if tuple take the indexed ids from first to second element
     preserve_ids (bool): Defines if the original index should be preserved (as index and columns)
     index_col (str): Alternatively provide the name of a column to use as index
+    normalize (bool): Normalizes the output values by the total of items available in each column (logical or)
     remove_duplicates (bool): Defines if an additional duplicate removal should be done
   '''
-  def __init__(self, cols=None, preserve_idx=True, index_col=None, remove_duplicates=False):
+  def __init__(self, cols=None, preserve_idx=True, index_col=None, normalize=True, remove_duplicates=False):
     self.cols = cols
     self.preserve_idx = preserve_idx
     self.index_col = index_col
+    self.normalize = normalize
     self.dedup = remove_duplicates
 
   def fit(self, X, y=None):
     return self
 
   def transform(self, X):
-    '''Performs the dot product on the input matrix to create a similarity score.'''
+    '''Performs the dot product on the input matrix to create a similarity score.
+
+    Args:
+      X (pd.DataFrame): DataFrame that has the relevant `cols` for the classification
+    '''
     # TODO: additional error checks
     # retrieve the relevant data
     mat = X
+
+    # optional remove duplicates
+    if self.dedup:
+      mat = mat.drop_duplicates()
+
     if self.cols is not None:
       if isinstance(self.cols, tuple):
         mat = X.iloc[:, self.cols[0]:self.cols[1]]
@@ -83,24 +100,25 @@ class SimilarityTransformer(BaseEstimator, TransformerMixin):
       else:
         mat = X.loc[:, self.cols]
 
-    # optional remove duplicates
-    if self.dedup:
-      mat = mat.remove_duplicates()
-
     # perform the actual transformation
-    mat = mat.dot(np.transpose(mat))
+    mat_t = np.transpose(mat)
+    sim = mat.dot(mat_t)
+
+    # check for normalization
+    if self.normalize:
+      sim = sim / (mat.dot(np.ones_like(mat_t)) + (np.ones_like(mat) - mat).dot(mat_t))
 
     # check for index update
     if self.index_col is not None:
       idx = X[self.index_col]
-      mat.index = idx
-      mat.columns = idx
+      sim.index = idx
+      sim.columns = idx
     elif self.preserve_idx == True:
       idx = np.array(X.index)
-      mat.index = idx
-      mat.columns = idx
+      sim.index = idx
+      sim.columns = idx
 
-    return mat
+    return sim
 
 
 class RankingTransformer(BaseEstimator, TransformerMixin):
@@ -113,7 +131,7 @@ class RankingTransformer(BaseEstimator, TransformerMixin):
     agg_fcts (list): List of string values that contain the aggregation functions for the separate `ranking_cols` (if None use `mean`)
     ascending (bool): Defines if the elements should be order ascending (might also be an array of same length as rating cols)
   '''
-  def __init__(self, ranking_cols, min_count=None, id_col=None, agg_fcts=None ascending=False):
+  def __init__(self, ranking_cols, min_count=None, id_col=None, agg_fcts=None, ascending=False):
     self.ranking_cols = ranking_cols
     self.id_col = id_col
     self.min_count = min_count
@@ -153,25 +171,22 @@ class RankingTransformer(BaseEstimator, TransformerMixin):
     # execute the aggrations based on pandas version
     pd_ver = [int(x) for x in pd.__version__.split('.')]
     if pd_ver[0] == 0 and pd_ver[1] < 25:
-      grp = grp.agg(**dict(zip(named_cols, zip(cols, aggs))))
-    else:
       # perform single aggregations
       items = []
       for agg, col in zip(aggs, cols):
         items.append(grp.agg(agg)[col])
-      grp = pd.DataFrame(**dict(zip(named_cols, items)))
+      grp = pd.DataFrame(dict(zip(named_cols, items)))
       # update the index
       grp.index = items[0].index
+    else:
+      grp = grp.agg(**dict(zip(named_cols, zip(cols, aggs))))
 
     # count filter
-    if self.min_rating is not None:
+    if self.min_count is not None:
       count = mat.groupby(idx).count().iloc[:, 0]
-      grp = grp[count >= self.min_rating]
-
-    # reset the index and join with original dataframe
-    mat = org.set_index(idx).join(grp)
+      grp = grp[count >= self.min_count]
 
     # sort the resulting dataframe
-    mat = mat.sort_values(by=cols, ascending=self.ascending)
+    mat = grp.sort_values(by=named_cols, ascending=self.ascending)
 
     return mat
