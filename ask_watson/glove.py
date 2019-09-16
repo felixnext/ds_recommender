@@ -24,6 +24,11 @@ def download(name):
   Returns:
     True if successful, otherwise False
   '''
+  # check if files exists
+  if os.path.isfile(os.path.join(folder, '{}.zip'.format(name))):
+    print('File found, no download needed')
+    return True
+
   url = None
   if name == 'twitter':
     url = 'http://nlp.stanford.edu/data/wordvecs/glove.twitter.27B.zip'

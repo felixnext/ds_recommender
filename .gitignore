@@ -1,3 +1,5 @@
 .ipynb_checkpoints
 __pycache__
 tmp/
+ask_watson/*.zip
+ask_watson/glove.*.txt

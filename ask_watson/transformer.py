@@ -91,13 +91,16 @@ class SimilarityTransformer(BaseEstimator, TransformerMixin):
     Args:
       X (pd.DataFrame): DataFrame that has the relevant `cols` for the classification
     '''
+    import time
     # TODO: additional error checks
+    start = time.time()
     # retrieve the relevant data
     mat = X
 
     # optional remove duplicates
     if self.dedup:
       mat = mat.drop_duplicates()
+    mat_dedup = mat
 
     if self.cols is not None:
       if isinstance(self.cols, tuple):
@@ -108,20 +111,27 @@ class SimilarityTransformer(BaseEstimator, TransformerMixin):
         mat = X.loc[:, self.cols]
 
     # perform the actual transformation
+    mat = mat.to_numpy('float32')
     mat_t = np.transpose(mat)
-    sim = mat.dot(mat_t)
+    sim = np.dot(mat, mat_t)
 
     # check for normalization
     if self.normalize:
-      sim = sim / (mat.dot(np.ones_like(mat_t)) + (np.ones_like(mat) - mat).dot(mat_t))
+      ones = np.add(
+        np.dot( mat, np.ones_like(mat_t) ),
+        np.dot( (np.subtract(np.ones_like(mat), mat)), mat_t )
+      )
+      sim = np.divide(sim, ones)
+
+    sim = pd.DataFrame(sim)
 
     # check for index update
     if self.index_col is not None:
-      idx = X[self.index_col]
+      idx = mat_dedup[self.index_col]
       sim.index = idx
       sim.columns = idx
     elif self.preserve_idx == True:
-      idx = np.array(X.index)
+      idx = np.array(mat_dedup.index)
       sim.index = idx
       sim.columns = idx
 
