@@ -8,9 +8,17 @@ This is a recommender system that will output data science resources based on us
 
 In order to run the system follow these steps:
 
-TODO
+```
+pip install .
+```
 
-Note that the entire recommendation system is also available as a package called `ask_watson`, which can be installed using `pip install .`
+Code samples can be found in the `notebooks` sections
+
+## Additional Remarks
+
+The code regarding the actual recommender system can be found in the `notebooks` folder. It contains a compiled `html` version as well as a notebook with code filled in. The notebook relies on the `ask_watson` package, however does not require you to install it.
+
+Note: Part IV of the notebook creates a custom recommender system that uses the glove embeddings. The code contains a script to automatically download the required modules, this might take additional disk space! (~3GB).
 
 ## ToDo List
 
